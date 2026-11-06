@@ -48,17 +48,42 @@ If a new version of Skia is included in an upgrade of this library, you need to 
 
 ### Publishing
 
-- Run the commands in the [Building](#building) section
-- Build the Android binaries with `yarn build-skia-android`
-- Build the NPM package with `yarn build-npm`
+Releases are published by hand; there is no CI release workflow. Run `yarn install --immutable` from the repo root, then run the commands below from `packages/skia`.
 
-Publish the NPM package manually. The output is found in the `dist` folder.
+1. Put the Skia binaries in `libs/` and the headers in `cpp/skia/`, starting from empty folders. Either:
+   - Rebuild them by running [build-skia.yml](https://github.com/ExodusForks/react-native-skia/actions/workflows/build-skia.yml) on `exodus-2.0.1` (about 45 minutes). Its artifacts expire, so an old run usually can't be reused. `copy-skia-headers` also needs the submodules (`git submodule update --init --recursive`).
 
-- Install Cocoapods in the example/ios folder `cd example/ios && pod install && cd ..`
+     ```sh
+     rm -rf libs
+     yarn download-artifacts && yarn workflow-copy-libs
+     yarn copy-skia-headers
+     ```
 
-#### Dry-Run
+   - Or reuse the last release's files, if nothing that feeds the Skia build (`externals/`, `packages/skia/scripts/`, `.github/workflows/build-skia.yml`) changed since its commit (`npm view @exodus/react-native-skia@<last-version> gitHead`):
 
-To figure out which version semantic-release will release, remove all plugins from [./packages/skia/.releaserc](./packages/skia/.releaserc) except for the `@semantic-release/commit-analyzer` plugin, then run `yarn semantic-release --dry-run`. Expect to wait a few minutes, the release command is super slow.
+     ```sh
+     rm -rf libs cpp/skia
+     npm pack @exodus/react-native-skia@<last-version> --pack-destination /tmp
+     tar -xzf /tmp/exodus-react-native-skia-<last-version>.tgz --strip-components=1 package/libs package/cpp/skia
+     ```
+
+2. Build the JS into an empty `lib/`, since leftover files there get published:
+
+   ```sh
+   rm -rf lib
+   yarn build
+   ```
+
+3. Pick the next version by hand (see `npm view @exodus/react-native-skia versions`). Set it without committing it (`package.json` stays at `0.0.0` in git), check the package contents, and publish:
+
+   ```sh
+   npm version <version> --no-git-tag-version
+   npm pack --dry-run
+   npm publish --tag exodus-2.0.1
+   git checkout package.json
+   ```
+
+   `npm pack --dry-run` should list `libs/apple/*.xcframework`, all four `libs/android/<abi>` folders, and `cpp/skia/`. Always pass `--tag`: `latest` belongs to the newer `exodus-2.6.2` line, and npm 11 won't publish a lower version without an explicit tag.
 
 ## Contributing
 
